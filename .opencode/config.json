@@ -19,11 +19,21 @@
       },
       "branch-name-max-length": 50,
       "require-ticket-number": false
+    },
+    "commit-size-guard": {
+      "enabled": true,
+      "max-files": 15,
+      "max-lines": 500,
+      "max-file-lines": 300,
+      "similarity-threshold": 0.3,
+      "auto-split": true,
+      "warning-only": true
     }
   },
   "permission": {
     "skill": {
-      "feature-branch-guard": "allow"
+      "feature-branch-guard": "allow",
+      "commit-size-guard": "allow"
     }
   }
 }
