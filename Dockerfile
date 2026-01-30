@@ -38,6 +38,14 @@ RUN apt-get update && \
     build-essential \
     make \
     procps \
+    # Netzwerk-Tools
+    iputils-ping \
+    net-tools \
+    dnsutils \
+    netcat-openbsd \
+    # SSH Client & Server
+    openssh-client \
+    openssh-server \
     && rm -rf /var/lib/apt/lists/*
 
 # Symlinks für fd-find erstellen (fd ist unter anderem Namen installiert)
