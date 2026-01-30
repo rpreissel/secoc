@@ -42,21 +42,31 @@ echo -e "${GREEN}✓ Image gefunden${NC}"
 # OpenCode Verzeichnisse
 OPENCODE_CONFIG_DIR="${HOME}/.config/opencode"
 OPENCODE_DATA_DIR="${HOME}/.local/share/opencode"
+OPENCODE_STATE_DIR="${HOME}/.local/state/opencode"
 
-# Prüfen ob OpenCode Config existiert, sonst Warnung
-if [ ! -d "${OPENCODE_CONFIG_DIR}" ]; then
-    echo -e "${YELLOW}⚠ Warnung: OpenCode Config nicht gefunden unter ${OPENCODE_CONFIG_DIR}${NC}"
-    echo -e "${YELLOW}  Das Config-Verzeichnis wird beim ersten Start erstellt.${NC}"
-fi
+# Maven Cache
+MAVEN_CACHE_DIR="${HOME}/.m2"
 
-# Prüfen ob OpenCode Data existiert, sonst Warnung
-if [ ! -d "${OPENCODE_DATA_DIR}" ]; then
-    echo -e "${YELLOW}⚠ Warnung: OpenCode Data nicht gefunden unter ${OPENCODE_DATA_DIR}${NC}"
-    echo -e "${YELLOW}  Das Data-Verzeichnis (für Provider Credentials) wird beim ersten Start erstellt.${NC}"
-fi
+# SSH Keys
+SSH_DIR="${HOME}/.ssh"
+
+# Verzeichnisse erstellen falls sie nicht existieren
+mkdir -p "${OPENCODE_CONFIG_DIR}"
+mkdir -p "${OPENCODE_DATA_DIR}"
+mkdir -p "${OPENCODE_STATE_DIR}"
+mkdir -p "${MAVEN_CACHE_DIR}"
 
 echo -e "${GREEN}✓ Config-Verzeichnis: ${OPENCODE_CONFIG_DIR}${NC}"
 echo -e "${GREEN}✓ Data-Verzeichnis: ${OPENCODE_DATA_DIR}${NC}"
+echo -e "${GREEN}✓ State-Verzeichnis: ${OPENCODE_STATE_DIR}${NC}"
+echo -e "${GREEN}✓ Maven-Cache: ${MAVEN_CACHE_DIR}${NC}"
+
+# SSH Keys prüfen
+if [ -d "${SSH_DIR}" ]; then
+    echo -e "${GREEN}✓ SSH-Keys gefunden: ${SSH_DIR}${NC}"
+else
+    echo -e "${YELLOW}⚠ SSH-Keys nicht gefunden unter ${SSH_DIR}${NC}"
+fi
 
 # Workspace Verzeichnis (erstes Argument oder aktuelles Verzeichnis)
 WORKSPACE_DIR="${1:-.}"
@@ -71,14 +81,36 @@ echo -e "${GREEN}✓ Workspace: ${WORKSPACE_DIR}${NC}"
 echo ""
 
 echo -e "${BLUE}Starte OpenCode Container...${NC}"
+echo -e "${YELLOW}Hinweis: Die erste Initialisierung kann 5-10 Sekunden dauern.${NC}"
 echo ""
+
+# SELinux-Labeling nur auf Linux verwenden
+if [[ "$(uname -s)" == "Linux" ]]; then
+    SELINUX_LABEL=":Z"
+    SELINUX_LABEL_RO=":ro,Z"
+else
+    SELINUX_LABEL=""
+    SELINUX_LABEL_RO=":ro"
+fi
+
+# Volume-Optionen vorbereiten
+VOLUME_OPTS=(
+    -v "${WORKSPACE_DIR}:/home/opencode/workspace${SELINUX_LABEL}"
+    -v "${OPENCODE_CONFIG_DIR}:/home/opencode/.config/opencode${SELINUX_LABEL}"
+    -v "${OPENCODE_DATA_DIR}:/home/opencode/.local/share/opencode${SELINUX_LABEL}"
+    -v "${OPENCODE_STATE_DIR}:/home/opencode/.local/state/opencode${SELINUX_LABEL}"
+    -v "${MAVEN_CACHE_DIR}:/home/opencode/.m2${SELINUX_LABEL}"
+)
+
+# SSH Keys mounten wenn vorhanden
+if [ -d "${SSH_DIR}" ]; then
+    VOLUME_OPTS+=(-v "${SSH_DIR}:/home/opencode/.ssh${SELINUX_LABEL_RO}")
+fi
 
 # Container starten mit Mounts
 podman run -it --rm \
     --name "${CONTAINER_NAME}" \
-    -v "${WORKSPACE_DIR}:/home/opencode/workspace:Z" \
-    -v "${OPENCODE_CONFIG_DIR}:/home/opencode/.config/opencode:Z" \
-    -v "${OPENCODE_DATA_DIR}:/home/opencode/.local/share/opencode:Z" \
+    "${VOLUME_OPTS[@]}" \
     "${FULL_IMAGE_NAME}" "$@"
 
 echo ""
