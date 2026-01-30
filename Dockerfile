@@ -35,4 +35,4 @@ RUN mkdir -p /home/${USER}/workspace
 WORKDIR /home/${USER}/workspace
 
 # OpenCode beim Start automatisch ausführen
-CMD ["opencode"]
+ENTRYPOINT ["opencode"]

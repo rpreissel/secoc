@@ -63,7 +63,7 @@ podman run -it --rm \
     --name "${CONTAINER_NAME}" \
     -v "${CURRENT_DIR}:/home/opencode/workspace:Z" \
     -v "${OPENCODE_CONFIG_DIR}:/home/opencode/.config/opencode:Z" \
-    "${FULL_IMAGE_NAME}"
+    "${FULL_IMAGE_NAME}" "$@"
 
 echo ""
 echo -e "${GREEN}Container beendet.${NC}"
