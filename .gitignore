@@ -1,0 +1,33 @@
+# .gitignore für GitHub Enterprise Copilot Tests
+
+# Lokale Umgebungskonfiguration (enthält Secrets!)
+test-configs/test-env.local.sh
+test-env.local.sh
+
+# Test-Ergebnisse
+test-results/
+*.log
+
+# Generierte Dateien
+generated-*.py
+generated-*.ts
+generated-*.sh
+generated-*.json
+
+# OpenCode Config (kann Secrets enthalten)
+opencode.json
+opencode.local.json
+
+# Temporäre Dateien
+*.tmp
+.DS_Store
+*.swp
+*~
+
+# IDE/Editor Dateien
+.vscode/
+.idea/
+*.iml
+
+# System-Dateien
+Thumbs.db

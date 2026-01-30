@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+
+# OpenCode AI Podman Run Script
+set -euo pipefail
+
+# Konfiguration
+IMAGE_NAME="opencode-ai"
+IMAGE_TAG="latest"
+FULL_IMAGE_NAME="${IMAGE_NAME}:${IMAGE_TAG}"
+CONTAINER_NAME="opencode-ai-$(date +%s)"
+
+# Farben für Output
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo -e "${BLUE}========================================${NC}"
+echo -e "${BLUE}OpenCode AI - Podman Container Starter${NC}"
+echo -e "${BLUE}========================================${NC}"
+echo ""
+
+# Prüfen ob Podman installiert ist
+if ! command -v podman &> /dev/null; then
+    echo -e "${RED}Fehler: Podman ist nicht installiert!${NC}"
+    echo "Bitte installiere Podman: brew install podman"
+    exit 1
+fi
+
+echo -e "${GREEN}✓ Podman gefunden${NC}"
+
+# Prüfen ob Image existiert
+if ! podman image exists "${FULL_IMAGE_NAME}"; then
+    echo -e "${RED}Fehler: Image '${FULL_IMAGE_NAME}' nicht gefunden!${NC}"
+    echo "Bitte baue zuerst das Image: ./build.sh"
+    exit 1
+fi
+
+echo -e "${GREEN}✓ Image gefunden${NC}"
+
+# OpenCode Config Verzeichnis
+OPENCODE_CONFIG_DIR="${HOME}/.config/opencode"
+
+# Prüfen ob OpenCode Config existiert, sonst Warnung
+if [ ! -d "${OPENCODE_CONFIG_DIR}" ]; then
+    echo -e "${YELLOW}⚠ Warnung: OpenCode Config nicht gefunden unter ${OPENCODE_CONFIG_DIR}${NC}"
+    echo -e "${YELLOW}  Das Config-Verzeichnis wird beim ersten Start erstellt.${NC}"
+fi
+
+echo -e "${GREEN}✓ Config-Verzeichnis: ${OPENCODE_CONFIG_DIR}${NC}"
+
+# Aktuelles Verzeichnis
+CURRENT_DIR="$(pwd)"
+echo -e "${GREEN}✓ Workspace: ${CURRENT_DIR}${NC}"
+echo ""
+
+echo -e "${BLUE}Starte OpenCode Container...${NC}"
+echo ""
+
+# Container starten mit Mounts
+podman run -it --rm \
+    --name "${CONTAINER_NAME}" \
+    -v "${CURRENT_DIR}:/home/opencode/workspace:Z" \
+    -v "${OPENCODE_CONFIG_DIR}:/home/opencode/.config/opencode:Z" \
+    "${FULL_IMAGE_NAME}"
+
+echo ""
+echo -e "${GREEN}Container beendet.${NC}"
