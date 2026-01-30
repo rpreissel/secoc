@@ -1,0 +1,29 @@
+{
+  "skills": {
+    "feature-branch-guard": {
+      "enabled": true,
+      "protected-branches": ["main", "master"],
+      "allowed-patterns": ["feature/*", "bugfix/*", "hotfix/*"],
+      "auto-push": true,
+      "ticket-sources": {
+        "github": {
+          "enabled": true,
+          "org": "your-org",
+          "repo": "your-repo"
+        },
+        "jira": {
+          "enabled": false,
+          "url": "https://your-domain.atlassian.net",
+          "project-key": "PROJ"
+        }
+      },
+      "branch-name-max-length": 50,
+      "require-ticket-number": false
+    }
+  },
+  "permission": {
+    "skill": {
+      "feature-branch-guard": "allow"
+    }
+  }
+}
