@@ -7,63 +7,48 @@ auto_run: true
 
 # Feature Branch Guard
 
-Execute BEFORE creating git commits (including when user requests commit/push).
+Execute BEFORE creating git commits.
+
+## Config
+Read protected branches from `.opencode/config.json` → `skills.feature-branch-guard.protected-branches` (default: `["main", "master"]`)
 
 ## Workflow
 
-### 1. Check Current Branch
-```bash
-git branch --show-current
-```
+**1. Check current branch**
 
-### 2. Read Protected Branches from Config
-- Path: `.opencode/config.json`
-- Key: `skills.feature-branch-guard.protected-branches`
-- Default: `["main", "master"]`
+**2. If protected branch:**
+- Inform user: "⚠️ On protected branch: {branch}"
+- Extract from user prompt:
+  - Ticket: `GH-123`, `JIRA-456`, `#789`, or `[A-Z]+-[0-9]+`
+  - Type: "fix/bug" → `bugfix/`, "add/new" → `feature/`, "urgent" → `hotfix/`, default → `feature/`
+  - Description: 2-4 key words, kebab-case
+- Generate 2 branch name suggestions: `{type}/{ticket}-{description}`
+- Ask user to choose (use `question` tool):
+  - Option 1: First suggestion (Recommended)
+  - Option 2: Second suggestion
+  - Option 3: Commit directly on protected branch (NOT recommended)
+  - Custom option available
+- If user chooses protected branch: Proceed with commit on current branch
+- Otherwise: Stash changes, create branch, restore changes, push if `config.auto-push` enabled
+- Proceed with commit
 
-### 3. If Protected Branch → Create Feature Branch
+**3. If feature branch:**
+- Proceed directly with commit
 
-**3.1 Extract Info from User Prompt:**
-- Ticket: `GH-123`, `JIRA-456`, `#789`, or `[A-Z]+-[0-9]+`
-- Type: "fix/bug" → `bugfix/`, "add/new" → `feature/`, "urgent" → `hotfix/`, else `feature/`
-- Description: Extract 2-4 key words, kebab-case
+## Commit Message Format
 
-**3.2 Generate 2 Suggestions:**
-- Format: `{type}/{ticket}-{description}` or `{type}/{description}`
-- Examples: `bugfix/GH-456-login`, `feature/add-oauth`
+**If ticket number exists in branch name:**
+- Extract ticket from branch name (pattern: `[A-Z]+-[0-9]+` or `GH-[0-9]+` or `#[0-9]+`)
+- Prefix commit message with ticket: `{TICKET}: {commit message}`
+- Example: Branch `bugfix/GH-123-login-bug` → Commit: `GH-123: Fix login validation bug`
 
-**3.3 Ask User (use `question` tool):**
-```
-⚠️ On protected branch: {branch}. Choose feature branch:
-1. {suggestion1} (Recommended)
-2. {suggestion2}
-3. [Custom]
-```
-
-**3.4 Create Branch:**
-```bash
-git stash push -m "WIP: Moving to feature branch"
-git checkout -b {selected_name}
-git stash pop
-git push -u origin {selected_name}  # if config.auto-push enabled
-```
-
-**3.5 Proceed with Original Task**
-
-### 4. If Feature Branch → Proceed Directly
-
-## Error Handling
-- Branch exists: `git checkout {name}` instead of create
-- Not git repo: Ask user if should `git init`
-- Stash conflicts: `git checkout stash@{0} -- .`
+**If no ticket in branch name:**
+- Use commit message as is
 
 ## Example
-```
-User: "Fix login bug GH-123"
-→ Check branch: "main"
-→ Inform: "⚠️ On protected branch: main"
+User: "Fix login bug GH-123" on branch `main`
 → Extract: ticket=GH-123, type=bugfix, desc=login-bug
-→ Suggest: bugfix/GH-123-login-bug, feature/GH-123-fix-login
-→ User selects option 1
-→ Create branch, then fix bug
-```
+→ Suggest: `bugfix/GH-123-login-bug`, `feature/GH-123-fix-login`
+→ User selects `bugfix/GH-123-login-bug`
+→ Create branch
+→ Commit message: `GH-123: Fix login validation bug`
