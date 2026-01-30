@@ -39,8 +39,9 @@ fi
 
 echo -e "${GREEN}✓ Image gefunden${NC}"
 
-# OpenCode Config Verzeichnis
+# OpenCode Verzeichnisse
 OPENCODE_CONFIG_DIR="${HOME}/.config/opencode"
+OPENCODE_DATA_DIR="${HOME}/.local/share/opencode"
 
 # Prüfen ob OpenCode Config existiert, sonst Warnung
 if [ ! -d "${OPENCODE_CONFIG_DIR}" ]; then
@@ -48,7 +49,14 @@ if [ ! -d "${OPENCODE_CONFIG_DIR}" ]; then
     echo -e "${YELLOW}  Das Config-Verzeichnis wird beim ersten Start erstellt.${NC}"
 fi
 
+# Prüfen ob OpenCode Data existiert, sonst Warnung
+if [ ! -d "${OPENCODE_DATA_DIR}" ]; then
+    echo -e "${YELLOW}⚠ Warnung: OpenCode Data nicht gefunden unter ${OPENCODE_DATA_DIR}${NC}"
+    echo -e "${YELLOW}  Das Data-Verzeichnis (für Provider Credentials) wird beim ersten Start erstellt.${NC}"
+fi
+
 echo -e "${GREEN}✓ Config-Verzeichnis: ${OPENCODE_CONFIG_DIR}${NC}"
+echo -e "${GREEN}✓ Data-Verzeichnis: ${OPENCODE_DATA_DIR}${NC}"
 
 # Aktuelles Verzeichnis
 CURRENT_DIR="$(pwd)"
@@ -63,6 +71,7 @@ podman run -it --rm \
     --name "${CONTAINER_NAME}" \
     -v "${CURRENT_DIR}:/home/opencode/workspace:Z" \
     -v "${OPENCODE_CONFIG_DIR}:/home/opencode/.config/opencode:Z" \
+    -v "${OPENCODE_DATA_DIR}:/home/opencode/.local/share/opencode:Z" \
     "${FULL_IMAGE_NAME}" "$@"
 
 echo ""
