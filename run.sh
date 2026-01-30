@@ -58,9 +58,16 @@ fi
 echo -e "${GREEN}✓ Config-Verzeichnis: ${OPENCODE_CONFIG_DIR}${NC}"
 echo -e "${GREEN}✓ Data-Verzeichnis: ${OPENCODE_DATA_DIR}${NC}"
 
-# Aktuelles Verzeichnis
-CURRENT_DIR="$(pwd)"
-echo -e "${GREEN}✓ Workspace: ${CURRENT_DIR}${NC}"
+# Workspace Verzeichnis (erstes Argument oder aktuelles Verzeichnis)
+WORKSPACE_DIR="${1:-.}"
+WORKSPACE_DIR="$(cd "${WORKSPACE_DIR}" && pwd)"  # Absolute Path ermitteln
+
+# Wenn ein Workspace-Parameter angegeben wurde, entfernen wir ihn aus $@
+if [ $# -gt 0 ] && [ -d "$1" ]; then
+    shift
+fi
+
+echo -e "${GREEN}✓ Workspace: ${WORKSPACE_DIR}${NC}"
 echo ""
 
 echo -e "${BLUE}Starte OpenCode Container...${NC}"
@@ -69,7 +76,7 @@ echo ""
 # Container starten mit Mounts
 podman run -it --rm \
     --name "${CONTAINER_NAME}" \
-    -v "${CURRENT_DIR}:/home/opencode/workspace:Z" \
+    -v "${WORKSPACE_DIR}:/home/opencode/workspace:Z" \
     -v "${OPENCODE_CONFIG_DIR}:/home/opencode/.config/opencode:Z" \
     -v "${OPENCODE_DATA_DIR}:/home/opencode/.local/share/opencode:Z" \
     "${FULL_IMAGE_NAME}" "$@"
