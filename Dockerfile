@@ -128,7 +128,7 @@ RUN mkdir -p /home/${USER}/workspace
 
 WORKDIR /home/${USER}/workspace
 
-# Schneller Entrypoint ohne jenv init (wird über ENV geladen)
+# Einfaches Entrypoint-Skript
 RUN echo '#!/bin/bash' > /home/${USER}/entrypoint.sh && \
     echo 'exec "$@"' >> /home/${USER}/entrypoint.sh && \
     chmod +x /home/${USER}/entrypoint.sh

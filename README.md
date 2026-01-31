@@ -11,8 +11,7 @@ Dieses Projekt ermöglicht es, OpenCode sicher in einem Docker- oder Podman-Cont
 │   └── config.json               # Projekt-Config
 │
 ├── Dockerfile                     # Container-Definition
-├── build.sh                       # Build-Skript für Container-Image
-├── run.sh                         # Start-Skript für Container
+├── seccode                        # Vereinigtes Build- und Run-Skript mit Auto-Update
 └── README.md                      # Diese Datei
 ```
 
@@ -26,45 +25,120 @@ Dieses Projekt ermöglicht es, OpenCode sicher in einem Docker- oder Podman-Cont
 - Linux (Debian/Ubuntu): `sudo apt-get install podman`
 - Linux (RHEL/CentOS): `sudo yum install podman`
 
-### 1. Container-Image bauen
+### Einfachste Nutzung - Alles in einem Befehl!
 
 ```bash
-./build.sh
+./seccode
 ```
 
-Das Skript:
-- Prüft ob Podman installiert ist
-- Baut das Container-Image mit dem Namen `opencode-ai:latest`
-- Verwendet einen Nicht-Root-User für erhöhte Sicherheit
+Das ist alles! Das `seccode` Skript übernimmt:
+- ✓ Automatische Version-Prüfung gegen GitHub
+- ✓ Automatischer Build bei neuer OpenCode-Version
+- ✓ Intelligente Erkennung ob Rebuild nötig ist
+- ✓ Container-Start mit allen Konfigurationen
+- ✓ Mounting von Workspace, Config, Caches, Git, SSH
 
-### 2. Container starten
+### Globale Installation (Optional - von überall aufrufbar)
+
+Um `seccode` von überall im System aufrufen zu können:
 
 ```bash
-./run.sh
+# Option 1: System-weit installieren (empfohlen, benötigt sudo)
+sudo ln -s $(pwd)/seccode /usr/local/bin/seccode
+
+# Option 2: Nur für aktuellen Benutzer (kein sudo nötig)
+mkdir -p ~/.local/bin
+ln -s $(pwd)/seccode ~/.local/bin/seccode
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc  # oder ~/.zshrc
+source ~/.bashrc  # oder source ~/.zshrc
+
+# Danach von überall verwendbar:
+cd ~/any/directory
+seccode
+seccode /path/to/project --model claude-sonnet-4
 ```
 
-Das Skript:
-- Mountet das aktuelle Verzeichnis als Workspace
-- Mountet die OpenCode-Konfiguration aus `~/.config/opencode`
-- Startet OpenCode interaktiv im Container
+**Vorteile der globalen Installation:**
+- Von jedem Verzeichnis aus aufrufbar
+- Kein `./` Präfix mehr nötig
+- Einfacherer Workflow
+- Skript findet Dockerfile automatisch
 
-### 3. Manueller Start (optional)
+### Weitere Nutzungsbeispiele
 
 ```bash
-# Mit Podman
-podman run -it --rm \
-  -v $(pwd):/home/opencode/workspace:Z \
-  -v ~/.config/opencode:/home/opencode/.config/opencode:Z \
-  opencode-ai:latest
+# Start im aktuellen Verzeichnis (Standard)
+./seccode
 
-# Mit Docker
-docker run -it --rm \
-  -v $(pwd):/home/opencode/workspace \
-  -v ~/.config/opencode:/home/opencode/.config/opencode \
-  opencode-ai:latest
+# Start mit spezifischem Workspace
+./seccode /path/to/project
+
+# Mit OpenCode-Parametern
+./seccode --model claude-sonnet-4
+
+# Workspace + OpenCode-Parameter kombiniert
+./seccode /path/to/project --model claude-sonnet-4
+
+# Erzwungener Rebuild (z.B. nach Dockerfile-Änderung)
+./seccode --rebuild
+
+# Spezifische OpenCode-Version verwenden
+./seccode --version 0.5.0
+
+# Update-Check überspringen (nutzt vorhandenes Image)
+./seccode --no-update
+
+# Hilfe anzeigen
+./seccode --help
+```
+
+### Auto-Update Funktion
+
+Das `seccode` Skript prüft bei **jedem Start** automatisch:
+- Gibt es eine neuere OpenCode-Version auf GitHub?
+- Stimmt die installierte Version mit der neuesten überein?
+- Falls nicht: Automatischer Rebuild mit neuer Version
+
+**Kein manuelles Update mehr nötig!** Das Skript hält OpenCode immer aktuell.
+
+### Manuelle Kontrolle (Optional)
+
+Falls du die automatische Update-Funktion nicht möchtest:
+
+```bash
+# Baue Image manuell mit spezifischer Version
+OPENCODE_VERSION=0.5.0 podman build --tag opencode-ai:latest .
+
+# Starte ohne Update-Check
+./seccode --no-update
 ```
 
 ## 📋 Container-Details
+
+### Was wird automatisch gemountet?
+
+Das `seccode` Skript mountet automatisch:
+
+**OpenCode-Verzeichnisse:**
+- `~/.config/opencode` → Konfiguration und API-Keys
+- `~/.local/share/opencode` → Daten
+- `~/.local/state/opencode` → Zustand
+- `~/.cache/opencode` → Cache
+
+**Build-Tool Caches (für schnellere Builds):**
+- `~/.m2` → Maven Cache
+- `~/.gradle` → Gradle Cache
+- `~/.npm` → NPM Cache
+- `~/.cache/pip` → Python Pip Cache
+- `~/.cache/bun` → Bun Cache
+
+**Git & SSH Integration:**
+- `~/.gitconfig` → Git-Konfiguration (read-only)
+- `~/.config/git` → Git-Verzeichnis (read-only)
+- `~/.ssh` → SSH-Keys für Git-Authentifizierung (read-only)
+
+**Workspace:**
+- Aktuelles Verzeichnis oder spezifizierter Pfad
 
 ### Dockerfile
 
@@ -73,6 +147,7 @@ Das Dockerfile basiert auf Debian Bookworm Slim und:
 - Installiert nur minimal notwendige Pakete (ca-certificates, curl, bash, git)
 - Installiert OpenCode über das offizielle Installationsskript
 - Setzt ein Workspace-Verzeichnis für Projekte
+- Speichert die OpenCode-Version im Image-Label für Auto-Update
 
 ### Build-Argumente
 
@@ -82,6 +157,9 @@ podman build --build-arg USER=myuser --tag opencode-ai:latest .
 
 # UID/GID anpassen (default: 1000/1000)
 podman build --build-arg UID=1001 --build-arg GID=1001 --tag opencode-ai:latest .
+
+# Spezifische OpenCode-Version (wird automatisch gesetzt)
+podman build --build-arg OPENCODE_VERSION=0.5.0 --tag opencode-ai:latest .
 ```
 
 ## 🔧 Konfiguration
@@ -177,8 +255,8 @@ sudo yum install podman
 ### Container startet nicht
 **Lösung:**
 ```bash
-# Image neu bauen
-./build.sh
+# Image neu bauen erzwingen
+./seccode --rebuild
 
 # Logs anschauen
 podman logs <container-id>
@@ -190,9 +268,24 @@ podman run -it --rm --entrypoint /bin/bash opencode-ai:latest
 ### OpenCode installiert sich nicht
 **Lösung:**
 - Prüfe Internetverbindung während des Builds
-- Build mit `--no-cache` wiederholen:
+- Build mit `--rebuild` und ohne Cache wiederholen:
+  ```bash
+  ./seccode --rebuild
+  ```
+- Oder manuell:
   ```bash
   podman build --no-cache --tag opencode-ai:latest .
+  ```
+
+### Image wird ständig neu gebaut
+**Lösung:**
+- Wenn du kein Auto-Update möchtest, nutze `--no-update`:
+  ```bash
+  ./seccode --no-update
+  ```
+- Oder verwende eine spezifische Version:
+  ```bash
+  ./seccode --version 0.5.0
   ```
 
 ## 🔐 Sicherheit
@@ -317,7 +410,7 @@ Dieses Projekt ist Open Source und kann frei verwendet werden.
 
 ---
 
-**Version:** 2.0.0  
+**Version:** 3.0.0  
 **Erstellt:** 2026-01-20  
-**Aktualisiert:** 2026-01-30  
-**Fokus:** Secure OpenCode in Docker/Podman
+**Aktualisiert:** 2026-01-31  
+**Fokus:** Secure OpenCode in Podman mit Auto-Update
