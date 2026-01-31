@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.0 - 2026-01-31
+
+### Features
+* feat!: add build and test steps before release (353b7b9)
+
 ## v0.2.3 - 2026-01-31
 
 ### Other Changes
