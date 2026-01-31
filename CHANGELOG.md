@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.3 - 2026-01-31
+
+### Other Changes
+* docs: translate all German text to English and simplify AGENTS.md (0eb4cb3)
+
 ## v0.2.2 - 2026-01-31
 
 ### Other Changes
