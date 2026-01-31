@@ -132,7 +132,6 @@ jobs:
           cp -r seccode release-package/ 2>/dev/null || true
           cp README.md release-package/ 2>/dev/null || true
           cp Dockerfile release-package/ 2>/dev/null || true
-          cp AGENTS.md release-package/ 2>/dev/null || true
           
           # Kopiere .opencode Verzeichnis (ohne Git-Artefakte)
           if [ -d .opencode ]; then
