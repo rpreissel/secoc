@@ -1,8 +1,8 @@
 # Secure OpenCode - OpenCode in Podman
 
-Dieses Projekt ermöglicht es, OpenCode sicher in einem Podman-Container auszuführen.
+This project enables secure execution of OpenCode in a Podman container.
 
-## 🚀 Schnellstart
+## 🚀 Quick Start
 
 ### Installation
 
@@ -17,107 +17,107 @@ sudo apt-get install podman
 sudo yum install podman
 ```
 
-### Benutzung
+### Usage
 
 ```bash
-# Einfacher Start
+# Simple start
 ./seccode
 
-# Mit spezifischem Workspace
+# With specific workspace
 ./seccode /path/to/project
 
-# Mit OpenCode-Parametern
+# With OpenCode parameters
 ./seccode --model claude-sonnet-4
 
-# Erzwungener Rebuild
+# Force rebuild
 ./seccode --rebuild
 
-# Spezifische Version verwenden
+# Use specific version
 ./seccode --version 0.5.0
 
-# Update-Check überspringen
+# Skip update check
 ./seccode --no-update
 ```
 
-**Das Skript übernimmt automatisch:**
-- ✓ Automatische Version-Prüfung gegen GitHub
-- ✓ Automatischer Build bei neuer OpenCode-Version
-- ✓ Container-Start mit allen Konfigurationen
-- ✓ Mounting von Workspace, Config, Caches, Git, SSH
+**The script automatically handles:**
+- ✓ Automatic version check against GitHub
+- ✓ Automatic build on new OpenCode version
+- ✓ Container start with all configurations
+- ✓ Mounting of workspace, config, caches, Git, SSH
 
-### Globale Installation (Optional)
+### Global Installation (Optional)
 
 ```bash
-# System-weit installieren (empfohlen)
+# System-wide installation (recommended)
 sudo ln -s $(pwd)/seccode /usr/local/bin/seccode
 
-# Nur für aktuellen Benutzer
+# User-only installation
 mkdir -p ~/.local/bin
 ln -s $(pwd)/seccode ~/.local/bin/seccode
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 ```
 
-Danach von überall aufrufbar: `seccode`
+After installation, call from anywhere: `seccode`
 
-## 📋 Was wird gemountet?
+## 📋 What gets mounted?
 
 **OpenCode:**
-- `~/.config/opencode` → Konfiguration und API-Keys
-- `~/.local/share/opencode` → Daten
+- `~/.config/opencode` → Configuration and API keys
+- `~/.local/share/opencode` → Data
 - `~/.cache/opencode` → Cache
 
-**Build-Tools:**
+**Build Tools:**
 - `~/.m2`, `~/.gradle`, `~/.npm`, `~/.cache/pip`, `~/.cache/bun`
 
 **Git & SSH:**
 - `~/.gitconfig`, `~/.config/git`, `~/.ssh` (read-only)
 
 **Workspace:**
-- Aktuelles Verzeichnis oder spezifizierter Pfad
+- Current directory or specified path
 
-## 🔧 Konfiguration
+## 🔧 Configuration
 
-### OpenCode API-Keys einrichten
+### Configure OpenCode API Keys
 
 ```bash
-# Config-Verzeichnis erstellen
+# Create config directory
 mkdir -p ~/.config/opencode
 
-# OpenCode einmal starten zur initialen Konfiguration
+# Start OpenCode once for initial configuration
 opencode
 
-# Siehe: https://opencode.ai/docs/configuration/
+# See: https://opencode.ai/docs/configuration/
 ```
 
 ## 🔍 Troubleshooting
 
-### Image wird ständig neu gebaut
+### Image is constantly being rebuilt
 ```bash
-./seccode --no-update  # Kein Auto-Update
-./seccode --version 0.5.0  # Spezifische Version
+./seccode --no-update  # No auto-update
+./seccode --version 0.5.0  # Specific version
 ```
 
-### Container startet nicht
+### Container won't start
 ```bash
-./seccode --rebuild  # Image neu bauen
-podman logs <container-id>  # Logs prüfen
+./seccode --rebuild  # Rebuild image
+podman logs <container-id>  # Check logs
 ```
 
-### OpenCode installiert sich nicht
+### OpenCode doesn't install
 ```bash
-# Build ohne Cache wiederholen
+# Rebuild without cache
 ./seccode --rebuild
 ```
 
-## 🔐 Sicherheit
+## 🔐 Security
 
-- **Nicht-Root-User**: Container läuft als User `opencode`
-- **Minimales Image**: Debian Bookworm Slim mit minimal notwendigen Paketen
-- **Secrets**: API-Keys werden via `~/.config/opencode` gemountet, nie im Image gespeichert
+- **Non-root user**: Container runs as user `opencode`
+- **Minimal image**: Debian Bookworm Slim with minimal required packages
+- **Secrets**: API keys are mounted via `~/.config/opencode`, never stored in image
 
 ---
 
 **Version:** 3.0.0  
-**Erstellt:** 2026-01-20  
-**Aktualisiert:** 2026-01-31  
-**Fokus:** Secure OpenCode in Podman mit Auto-Update
+**Created:** 2026-01-20  
+**Updated:** 2026-01-31  
+**Focus:** Secure OpenCode in Podman with auto-update

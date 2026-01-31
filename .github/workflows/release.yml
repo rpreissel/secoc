@@ -26,10 +26,10 @@ jobs:
       - name: Determine Version
         id: version
         run: |
-          # Installiere semantic-release für Versionierung
+          # Install semantic-release for versioning
           npm install -g semantic-release @semantic-release/git @semantic-release/changelog conventional-changelog-conventionalcommits
           
-          # Hole die letzte Version (falls vorhanden)
+          # Get last version (if available)
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           
           if [ -z "$LAST_TAG" ]; then
@@ -43,7 +43,7 @@ jobs:
             COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"%s")
           fi
           
-          # Bestimme Version Bump
+          # Determine version bump
           MAJOR=0
           MINOR=0
           PATCH=1
@@ -57,7 +57,7 @@ jobs:
             PATCH=0
           fi
           
-          # Berechne neue Version
+          # Calculate new version
           IFS='.' read -r -a VERSION_PARTS <<< "$LAST_VERSION"
           CURRENT_MAJOR=${VERSION_PARTS[0]:-0}
           CURRENT_MINOR=${VERSION_PARTS[1]:-0}
@@ -91,7 +91,7 @@ jobs:
             CHANGELOG=$(git log ${LAST_TAG}..HEAD --pretty=format:"* %s (%h)" --no-merges)
           fi
           
-          # Gruppiere nach Commit-Typ
+          # Group by commit type
           FEATURES=$(echo "$CHANGELOG" | grep "^* feat" || true)
           FIXES=$(echo "$CHANGELOG" | grep "^* fix" || true)
           OTHERS=$(echo "$CHANGELOG" | grep -v "^* feat" | grep -v "^* fix" || true)
@@ -125,14 +125,14 @@ jobs:
 
       - name: Update Changelog
         run: |
-          # Hole existierendes CHANGELOG.md oder erstelle Header
+          # Get existing CHANGELOG.md or create header
           if [ -f CHANGELOG.md ]; then
             OLD_CHANGELOG=$(tail -n +3 CHANGELOG.md)
           else
             OLD_CHANGELOG=""
           fi
           
-          # Generiere neuen Changelog-Eintrag für diese Version
+          # Generate new changelog entry for this version
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           
           if [ -z "$LAST_TAG" ]; then
@@ -145,7 +145,7 @@ jobs:
           FIXES=$(echo "$COMMITS" | grep "^* fix" || true)
           OTHERS=$(echo "$COMMITS" | grep -v "^* feat" | grep -v "^* fix" || true)
           
-          # Erstelle neues CHANGELOG.md mit neuester Version oben
+          # Create new CHANGELOG.md with newest version on top
           {
             echo "# Changelog"
             echo ""
@@ -168,13 +168,13 @@ jobs:
               echo ""
             fi
             
-            # Füge altes Changelog hinzu (falls vorhanden)
+            # Add old changelog (if present)
             if [ -n "$OLD_CHANGELOG" ]; then
               echo "$OLD_CHANGELOG"
             fi
           } > CHANGELOG.md
           
-          # Committe das aktualisierte CHANGELOG.md
+          # Commit updated CHANGELOG.md
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add CHANGELOG.md
@@ -182,25 +182,25 @@ jobs:
 
       - name: Create Release Package
         run: |
-          # Erstelle Release-Verzeichnis
+          # Create release directory
           mkdir -p release-package
           
-          # Kopiere relevante Dateien
+          # Copy relevant files
           cp -r seccode release-package/ 2>/dev/null || true
           cp README.md release-package/ 2>/dev/null || true
           cp Dockerfile release-package/ 2>/dev/null || true
           cp CHANGELOG.md release-package/ 2>/dev/null || true
           
-          # Kopiere .opencode Verzeichnis (ohne Git-Artefakte)
+          # Copy .opencode directory (without Git artifacts)
           if [ -d .opencode ]; then
             cp -r .opencode release-package/
           fi
           
-          # Erstelle Archiv
+          # Create archive
           tar -czf secoc-v${{ steps.version.outputs.version }}.tar.gz -C release-package .
           zip -r secoc-v${{ steps.version.outputs.version }}.zip release-package/*
           
-          # Erstelle Checksums
+          # Create checksums
           sha256sum secoc-v${{ steps.version.outputs.version }}.tar.gz > secoc-v${{ steps.version.outputs.version }}.tar.gz.sha256
           sha256sum secoc-v${{ steps.version.outputs.version }}.zip > secoc-v${{ steps.version.outputs.version }}.zip.sha256
 

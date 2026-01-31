@@ -1,28 +1,28 @@
 # OpenCode AI Dockerfile for Podman
 FROM docker.io/library/debian:bookworm-slim
 
-# Sicherheits- und Build-Argumente
+# Security and Build Arguments
 ARG USER=opencode
 ARG UID=1000
 ARG GID=1000
 ARG OPENCODE_VERSION=latest
 
-# System-Updates und Entwickler-Tools installieren
+# Install system updates and developer tools
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    # Basis-Tools
+    # Base tools
     ca-certificates \
     curl \
     wget \
     bash \
     git \
-    # Nützliche CLI-Tools
+    # Useful CLI tools
     jq \
     unzip \
     zip \
     vim \
     nano \
-    # OpenCode-spezifische Tools
+    # OpenCode-specific tools
     ripgrep \
     fd-find \
     # Python & Pip
@@ -31,14 +31,14 @@ RUN apt-get update && \
     python3-venv \
     # Java Development Kit (OpenJDK 17)
     openjdk-17-jdk \
-    # Java Build-Tools
+    # Java build tools
     maven \
     gradle \
-    # Weitere nützliche Tools
+    # Additional useful tools
     build-essential \
     make \
     procps \
-    # Netzwerk-Tools
+    # Network tools
     iputils-ping \
     net-tools \
     dnsutils \
@@ -48,10 +48,10 @@ RUN apt-get update && \
     openssh-server \
     && rm -rf /var/lib/apt/lists/*
 
-# Symlinks für fd-find erstellen (fd ist unter anderem Namen installiert)
+# Create symlinks for fd-find (fd is installed under a different name)
 RUN ln -s /usr/bin/fdfind /usr/local/bin/fd
 
-# OpenJDK 21 aus Adoptium/Eclipse Temurin installieren
+# Install OpenJDK 21 from Adoptium/Eclipse Temurin
 RUN ARCH=$(dpkg --print-architecture) && \
     wget -O- https://packages.adoptium.net/artifactory/api/gpg/key/public | tee /etc/apt/trusted.gpg.d/adoptium.asc && \
     echo "deb https://packages.adoptium.net/artifactory/deb bookworm main" | tee /etc/apt/sources.list.d/adoptium.list && \
@@ -59,35 +59,35 @@ RUN ARCH=$(dpkg --print-architecture) && \
     apt-get install -y --no-install-recommends temurin-21-jdk && \
     rm -rf /var/lib/apt/lists/*
 
-# Node.js LTS (20.x) installieren
+# Install Node.js LTS (20.x)
 RUN ARCH=$(dpkg --print-architecture) && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-# Bun installieren (schnelle JavaScript Runtime & Package Manager)
+# Install Bun (fast JavaScript runtime & package manager)
 RUN curl -fsSL https://bun.sh/install | bash && \
     ln -s /root/.bun/bin/bun /usr/local/bin/bun
 
-# Python als 'python' verfügbar machen
+# Make Python available as 'python'
 RUN ln -sf /usr/bin/python3 /usr/local/bin/python
 
-# Nicht-root User erstellen für Sicherheit
+# Create non-root user for security
 RUN groupadd -g ${GID} ${USER} && \
     useradd -m -u ${UID} -g ${GID} -s /bin/bash ${USER}
 
-# Als neuer User wechseln
+# Switch to new user
 USER ${USER}
 WORKDIR /home/${USER}
 
-# jenv installieren für Java-Versionsverwaltung
+# Install jenv for Java version management
 RUN git clone https://github.com/jenv/jenv.git ~/.jenv && \
     echo 'export PATH="$HOME/.jenv/bin:$PATH"' >> ~/.bashrc && \
     echo 'eval "$(jenv init -)"' >> ~/.bashrc && \
     echo 'export PATH="$HOME/.jenv/bin:$PATH"' >> ~/.profile && \
     echo 'eval "$(jenv init -)"' >> ~/.profile
 
-# jenv konfigurieren und Java-Versionen hinzufügen
+# Configure jenv and add Java versions
 RUN bash -c 'export PATH="$HOME/.jenv/bin:$PATH" && eval "$(jenv init -)" && \
     jenv add /usr/lib/jvm/java-17-openjdk-* && \
     jenv add /usr/lib/jvm/temurin-21-jdk-* && \
@@ -97,12 +97,12 @@ RUN bash -c 'export PATH="$HOME/.jenv/bin:$PATH" && eval "$(jenv init -)" && \
     echo 'export JENV_SHELL=bash' >> /home/${USER}/.jenv_init && \
     echo 'export JENV_LOADED=1' >> /home/${USER}/.jenv_init
 
-# Alle wichtigen Tools im PATH verfügbar machen
+# Make all important tools available in PATH
 ENV PATH="/home/${USER}/.jenv/shims:/home/${USER}/.jenv/bin:${PATH}"
 ENV JENV_ROOT="/home/${USER}/.jenv"
 ENV JENV_SHELL=bash
 
-# OpenCode direkt installieren
+# Install OpenCode directly
 RUN mkdir -p /home/${USER}/.opencode/bin && \
     ARCH=$(uname -m) && \
     if [ "${ARCH}" = "aarch64" ]; then \
@@ -120,18 +120,18 @@ RUN mkdir -p /home/${USER}/.opencode/bin && \
     rm /tmp/opencode.tar.gz && \
     chmod +x /home/${USER}/.opencode/bin/opencode
 
-# Sicherstellen dass OpenCode und alle Tools im PATH sind
+# Ensure OpenCode and all tools are in PATH
 ENV PATH="/home/${USER}/.opencode/bin:${PATH}"
 
-# Workspace-Verzeichnis erstellen
+# Create workspace directory
 RUN mkdir -p /home/${USER}/workspace
 
 WORKDIR /home/${USER}/workspace
 
-# Einfaches Entrypoint-Skript
+# Simple entrypoint script
 RUN echo '#!/bin/bash' > /home/${USER}/entrypoint.sh && \
     echo 'exec "$@"' >> /home/${USER}/entrypoint.sh && \
     chmod +x /home/${USER}/entrypoint.sh
 
-# OpenCode direkt starten
+# Start OpenCode directly
 ENTRYPOINT ["/home/opencode/entrypoint.sh", "opencode"]
