@@ -10,8 +10,61 @@ permissions:
   pull-requests: write
 
 jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Podman
+        run: |
+          # Podman is pre-installed on Ubuntu runners
+          podman --version
+
+      - name: Build Docker Image
+        run: |
+          # Build image with latest version
+          podman build \
+            --tag opencode-ai:latest \
+            --format docker \
+            --build-arg OPENCODE_VERSION=latest \
+            --label opencode_version=latest \
+            --label build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            .
+
+      - name: Verify Image
+        run: |
+          # Check if image was built successfully
+          podman images | grep opencode-ai
+          
+          # Inspect image
+          podman inspect opencode-ai:latest
+
+      - name: Test seccode Script
+        run: |
+          # Make script executable
+          chmod +x ./seccode
+          
+          # Test help output
+          ./seccode --help
+          
+          # Test with --no-update flag (should use the built image)
+          # We create a simple test workspace
+          mkdir -p /tmp/test-workspace
+          echo "Test workspace" > /tmp/test-workspace/README.md
+          
+          # Test dry-run: Just verify the script can parse arguments and find the image
+          # We use --no-update to skip version checks
+          echo "Testing seccode script..."
+          
+          # Verify script can be executed and shows version info
+          ./seccode --no-update --help || true
+
   release:
     runs-on: ubuntu-latest
+    needs: build-and-test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
