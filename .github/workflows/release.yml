@@ -123,29 +123,34 @@ jobs:
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
-      - name: Create Release Package
+      - name: Update Changelog
         run: |
-          # Erstelle Release-Verzeichnis
-          mkdir -p release-package
+          # Hole existierendes CHANGELOG.md oder erstelle Header
+          if [ -f CHANGELOG.md ]; then
+            OLD_CHANGELOG=$(tail -n +3 CHANGELOG.md)
+          else
+            OLD_CHANGELOG=""
+          fi
           
-          # Erstelle CHANGELOG.md Datei
+          # Generiere neuen Changelog-Eintrag für diese Version
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           
+          if [ -z "$LAST_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"* %s (%h)" --no-merges)
+          else
+            COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"* %s (%h)" --no-merges)
+          fi
+          
+          FEATURES=$(echo "$COMMITS" | grep "^* feat" || true)
+          FIXES=$(echo "$COMMITS" | grep "^* fix" || true)
+          OTHERS=$(echo "$COMMITS" | grep -v "^* feat" | grep -v "^* fix" || true)
+          
+          # Erstelle neues CHANGELOG.md mit neuester Version oben
           {
             echo "# Changelog"
             echo ""
             echo "## v${{ steps.version.outputs.version }} - $(date +%Y-%m-%d)"
             echo ""
-            
-            if [ -z "$LAST_TAG" ]; then
-              CHANGELOG=$(git log --pretty=format:"* %s (%h)" --no-merges)
-            else
-              CHANGELOG=$(git log ${LAST_TAG}..HEAD --pretty=format:"* %s (%h)" --no-merges)
-            fi
-            
-            FEATURES=$(echo "$CHANGELOG" | grep "^* feat" || true)
-            FIXES=$(echo "$CHANGELOG" | grep "^* fix" || true)
-            OTHERS=$(echo "$CHANGELOG" | grep -v "^* feat" | grep -v "^* fix" || true)
             
             if [ -n "$FEATURES" ]; then
               echo "### Features"
@@ -162,12 +167,29 @@ jobs:
               echo "$OTHERS"
               echo ""
             fi
-          } > release-package/CHANGELOG.md
+            
+            # Füge altes Changelog hinzu (falls vorhanden)
+            if [ -n "$OLD_CHANGELOG" ]; then
+              echo "$OLD_CHANGELOG"
+            fi
+          } > CHANGELOG.md
+          
+          # Committe das aktualisierte CHANGELOG.md
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git commit -m "chore: update CHANGELOG.md for v${{ steps.version.outputs.version }}"
+
+      - name: Create Release Package
+        run: |
+          # Erstelle Release-Verzeichnis
+          mkdir -p release-package
           
           # Kopiere relevante Dateien
           cp -r seccode release-package/ 2>/dev/null || true
           cp README.md release-package/ 2>/dev/null || true
           cp Dockerfile release-package/ 2>/dev/null || true
+          cp CHANGELOG.md release-package/ 2>/dev/null || true
           
           # Kopiere .opencode Verzeichnis (ohne Git-Artefakte)
           if [ -d .opencode ]; then
@@ -186,6 +208,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Push CHANGELOG update
+          git push origin main
+          
+          # Create and push tag
           git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
           git push origin "v${{ steps.version.outputs.version }}"
 
