@@ -128,6 +128,42 @@ jobs:
           # Erstelle Release-Verzeichnis
           mkdir -p release-package
           
+          # Erstelle CHANGELOG.md Datei
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          {
+            echo "# Changelog"
+            echo ""
+            echo "## v${{ steps.version.outputs.version }} - $(date +%Y-%m-%d)"
+            echo ""
+            
+            if [ -z "$LAST_TAG" ]; then
+              CHANGELOG=$(git log --pretty=format:"* %s (%h)" --no-merges)
+            else
+              CHANGELOG=$(git log ${LAST_TAG}..HEAD --pretty=format:"* %s (%h)" --no-merges)
+            fi
+            
+            FEATURES=$(echo "$CHANGELOG" | grep "^* feat" || true)
+            FIXES=$(echo "$CHANGELOG" | grep "^* fix" || true)
+            OTHERS=$(echo "$CHANGELOG" | grep -v "^* feat" | grep -v "^* fix" || true)
+            
+            if [ -n "$FEATURES" ]; then
+              echo "### Features"
+              echo "$FEATURES"
+              echo ""
+            fi
+            if [ -n "$FIXES" ]; then
+              echo "### Bug Fixes"
+              echo "$FIXES"
+              echo ""
+            fi
+            if [ -n "$OTHERS" ]; then
+              echo "### Other Changes"
+              echo "$OTHERS"
+              echo ""
+            fi
+          } > release-package/CHANGELOG.md
+          
           # Kopiere relevante Dateien
           cp -r seccode release-package/ 2>/dev/null || true
           cp README.md release-package/ 2>/dev/null || true
