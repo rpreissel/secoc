@@ -1,0 +1,164 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Determine Version
+        id: version
+        run: |
+          # Installiere semantic-release für Versionierung
+          npm install -g semantic-release @semantic-release/git @semantic-release/changelog conventional-changelog-conventionalcommits
+          
+          # Hole die letzte Version (falls vorhanden)
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Last tag: $LAST_TAG"
+          
+          # Extrahiere Version ohne 'v' Präfix
+          LAST_VERSION=${LAST_TAG#v}
+          echo "Last version: $LAST_VERSION"
+          
+          # Analysiere Commits seit letztem Tag
+          COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"%s")
+          
+          # Bestimme Version Bump
+          MAJOR=0
+          MINOR=0
+          PATCH=1
+          
+          if echo "$COMMITS" | grep -qE "^(BREAKING CHANGE:|.*!:)"; then
+            MAJOR=1
+            MINOR=0
+            PATCH=0
+          elif echo "$COMMITS" | grep -qE "^feat(\(.+\))?:"; then
+            MINOR=1
+            PATCH=0
+          fi
+          
+          # Berechne neue Version
+          IFS='.' read -r -a VERSION_PARTS <<< "$LAST_VERSION"
+          CURRENT_MAJOR=${VERSION_PARTS[0]:-0}
+          CURRENT_MINOR=${VERSION_PARTS[1]:-0}
+          CURRENT_PATCH=${VERSION_PARTS[2]:-0}
+          
+          NEW_MAJOR=$((CURRENT_MAJOR + MAJOR))
+          if [ $MAJOR -eq 1 ]; then
+            NEW_MINOR=0
+            NEW_PATCH=0
+          else
+            NEW_MINOR=$((CURRENT_MINOR + MINOR))
+            if [ $MINOR -eq 1 ]; then
+              NEW_PATCH=0
+            else
+              NEW_PATCH=$((CURRENT_PATCH + PATCH))
+            fi
+          fi
+          
+          NEW_VERSION="${NEW_MAJOR}.${NEW_MINOR}.${NEW_PATCH}"
+          echo "New version: $NEW_VERSION"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Generate Changelog
+        id: changelog
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          if [ -z "$LAST_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"* %s (%h)" --no-merges)
+          else
+            CHANGELOG=$(git log ${LAST_TAG}..HEAD --pretty=format:"* %s (%h)" --no-merges)
+          fi
+          
+          # Gruppiere nach Commit-Typ
+          FEATURES=$(echo "$CHANGELOG" | grep "^* feat" || true)
+          FIXES=$(echo "$CHANGELOG" | grep "^* fix" || true)
+          OTHERS=$(echo "$CHANGELOG" | grep -v "^* feat" | grep -v "^* fix" || true)
+          
+          {
+            echo "changelog<<EOF"
+            echo "## What's Changed"
+            echo ""
+            if [ -n "$FEATURES" ]; then
+              echo "### Features"
+              echo "$FEATURES"
+              echo ""
+            fi
+            if [ -n "$FIXES" ]; then
+              echo "### Bug Fixes"
+              echo "$FIXES"
+              echo ""
+            fi
+            if [ -n "$OTHERS" ]; then
+              echo "### Other Changes"
+              echo "$OTHERS"
+              echo ""
+            fi
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LAST_TAG}...v${{ steps.version.outputs.version }}"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Create Release Package
+        run: |
+          # Erstelle Release-Verzeichnis
+          mkdir -p release-package
+          
+          # Kopiere relevante Dateien
+          cp -r seccode release-package/ 2>/dev/null || true
+          cp README.md release-package/ 2>/dev/null || true
+          cp Dockerfile release-package/ 2>/dev/null || true
+          cp AGENTS.md release-package/ 2>/dev/null || true
+          
+          # Kopiere .opencode Verzeichnis (ohne Git-Artefakte)
+          if [ -d .opencode ]; then
+            cp -r .opencode release-package/
+          fi
+          
+          # Erstelle Archiv
+          tar -czf secoc-v${{ steps.version.outputs.version }}.tar.gz -C release-package .
+          zip -r secoc-v${{ steps.version.outputs.version }}.zip release-package/*
+          
+          # Erstelle Checksums
+          sha256sum secoc-v${{ steps.version.outputs.version }}.tar.gz > secoc-v${{ steps.version.outputs.version }}.tar.gz.sha256
+          sha256sum secoc-v${{ steps.version.outputs.version }}.zip > secoc-v${{ steps.version.outputs.version }}.zip.sha256
+
+      - name: Create Git Tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Release v${{ steps.version.outputs.version }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          draft: false
+          prerelease: false
+          files: |
+            secoc-v${{ steps.version.outputs.version }}.tar.gz
+            secoc-v${{ steps.version.outputs.version }}.tar.gz.sha256
+            secoc-v${{ steps.version.outputs.version }}.zip
+            secoc-v${{ steps.version.outputs.version }}.zip.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
