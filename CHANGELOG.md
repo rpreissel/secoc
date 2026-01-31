@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.2 - 2026-01-31
+
+### Other Changes
+* docs: add missing release history to CHANGELOG.md (4d18aae)
+
 ## v0.2.1 - 2026-01-31
 
 ### Bug Fixes
@@ -22,4 +27,3 @@
 
 ### Features
 * feat: add GitHub Actions workflow for automated releases (02fa2e5)
-
