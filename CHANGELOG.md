@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.1 - 2026-01-31
+
+### Bug Fixes
+* fix: improve Dockerfile security and fix Bun installation (75b8038)
+
 ## v1.0.0 - 2026-01-31
 
 ### Features
