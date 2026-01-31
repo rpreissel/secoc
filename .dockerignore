@@ -1,0 +1,40 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+!README.md
+CHANGELOG.md
+DOCKERFILE_IMPROVEMENTS.md
+
+# Test files
+test-dockerfile.sh
+*.test.js
+*.spec.js
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build artifacts
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OpenCode local data (not needed in image)
+.opencode/
+
+# Container-related files (not needed in build context)
+.dockerignore
