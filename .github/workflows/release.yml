@@ -30,15 +30,18 @@ jobs:
           npm install -g semantic-release @semantic-release/git @semantic-release/changelog conventional-changelog-conventionalcommits
           
           # Hole die letzte Version (falls vorhanden)
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          echo "Last tag: $LAST_TAG"
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           
-          # Extrahiere Version ohne 'v' Präfix
-          LAST_VERSION=${LAST_TAG#v}
-          echo "Last version: $LAST_VERSION"
-          
-          # Analysiere Commits seit letztem Tag
-          COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"%s")
+          if [ -z "$LAST_TAG" ]; then
+            echo "No previous tags found - this is the first release"
+            LAST_VERSION="0.0.0"
+            COMMITS=$(git log --pretty=format:"%s")
+          else
+            echo "Last tag: $LAST_TAG"
+            LAST_VERSION=${LAST_TAG#v}
+            echo "Last version: $LAST_VERSION"
+            COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"%s")
+          fi
           
           # Bestimme Version Bump
           MAJOR=0
@@ -112,7 +115,11 @@ jobs:
               echo "$OTHERS"
               echo ""
             fi
-            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LAST_TAG}...v${{ steps.version.outputs.version }}"
+            if [ -n "$LAST_TAG" ]; then
+              echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LAST_TAG}...v${{ steps.version.outputs.version }}"
+            else
+              echo "**Full Changelog**: https://github.com/${{ github.repository }}/commits/v${{ steps.version.outputs.version }}"
+            fi
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
