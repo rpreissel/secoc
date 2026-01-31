@@ -1,0 +1,470 @@
+#!/usr/bin/env bash
+
+# seccode - OpenCode AI Podman Runner mit Auto-Update
+# Vereinigtes Skript für Build und Run mit automatischer Versions-Verwaltung
+set -euo pipefail
+
+# ============================================================================
+# KONFIGURATION
+# ============================================================================
+
+IMAGE_NAME="opencode-ai"
+IMAGE_TAG="latest"
+FULL_IMAGE_NAME="${IMAGE_NAME}:${IMAGE_TAG}"
+CONTAINER_NAME="opencode-ai-$(date +%s)"
+
+# Skript-Verzeichnis ermitteln (wo dieses Skript liegt)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Dockerfile-Verzeichnis (dort wo das Dockerfile liegt)
+DOCKERFILE_DIR="${SCRIPT_DIR}"
+
+# Farben für Output
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# ============================================================================
+# HILFSFUNKTIONEN
+# ============================================================================
+
+print_header() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}$1${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+}
+
+print_success() {
+    echo -e "${GREEN}✓ $1${NC}" >&2
+}
+
+print_info() {
+    echo -e "${BLUE}ℹ $1${NC}" >&2
+}
+
+print_warning() {
+    echo -e "${YELLOW}⚠ $1${NC}" >&2
+}
+
+print_error() {
+    echo -e "${RED}✗ $1${NC}" >&2
+}
+
+show_help() {
+    cat <<EOF
+${BLUE}seccode${NC} - OpenCode AI Container Runner mit Auto-Update
+
+${CYAN}VERWENDUNG:${NC}
+  seccode [OPTIONEN] [WORKSPACE] [OPENCODE_ARGS...]
+
+${CYAN}OPTIONEN:${NC}
+  --rebuild              Erzwinge Image-Rebuild (ignoriere Version-Check)
+  --no-update            Überspringe Auto-Update (verwende vorhandenes Image)
+  --version VERSION      Verwende spezifische OpenCode-Version (z.B. 0.5.0)
+  --help                 Zeige diese Hilfe
+
+${CYAN}ARGUMENTE:${NC}
+  WORKSPACE             Pfad zum Workspace-Verzeichnis (Standard: aktuelles Verzeichnis)
+  OPENCODE_ARGS         Alle weiteren Parameter werden an OpenCode übergeben
+
+${CYAN}BEISPIELE:${NC}
+  seccode                                    # Starte im aktuellen Verzeichnis
+  seccode /path/to/project                   # Starte mit spezifischem Workspace
+  seccode --model claude-sonnet-4            # Mit OpenCode-Parametern
+  seccode /path/to/project --model gpt-4     # Workspace + Parameter
+  seccode --rebuild                          # Erzwinge Rebuild
+  seccode --version 0.5.0                    # Verwende spezifische Version
+  seccode --no-update                        # Überspringe Update-Check
+
+${CYAN}INSTALLATION FÜR GLOBALEN AUFRUF:${NC}
+  # Symlink in /usr/local/bin erstellen (von überall aufrufbar)
+  sudo ln -s ${SCRIPT_DIR}/seccode /usr/local/bin/seccode
+  
+  # Oder in ~/.local/bin (ohne sudo, füge ~/.local/bin zu \$PATH hinzu)
+  mkdir -p ~/.local/bin
+  ln -s ${SCRIPT_DIR}/seccode ~/.local/bin/seccode
+  export PATH="\$HOME/.local/bin:\$PATH"  # In ~/.bashrc oder ~/.zshrc
+
+${CYAN}FUNKTIONEN:${NC}
+  - Automatischer Update-Check bei jedem Start
+  - Automatischer Build bei neuer Version oder fehlendem Image
+  - Persistente Konfiguration und Caches
+  - Git und SSH Integration
+  - Build-Tool Cache-Unterstützung (Maven, Gradle, NPM, Pip, Bun)
+  - Von überall aufrufbar (mit Symlink oder direkt)
+
+${CYAN}SKRIPT-INFO:${NC}
+  Skript-Verzeichnis: ${SCRIPT_DIR}
+  Dockerfile-Verzeichnis: ${DOCKERFILE_DIR}
+
+EOF
+    exit 0
+}
+
+# ============================================================================
+# VERSION-MANAGEMENT
+# ============================================================================
+
+check_latest_version() {
+    print_info "Ermittle neueste OpenCode Version..."
+    
+    local version
+    version=$(curl -fsSL https://api.github.com/repos/anomalyco/opencode/releases/latest 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/' || echo "")
+    
+    if [ -z "${version}" ]; then
+        print_warning "Konnte neueste Version nicht ermitteln, verwende 'latest'"
+        echo "latest"
+    else
+        echo "${version}"
+    fi
+}
+
+get_image_version() {
+    if ! podman image exists "${FULL_IMAGE_NAME}" 2>/dev/null; then
+        echo ""
+        return
+    fi
+    
+    local version
+    version=$(podman inspect "${FULL_IMAGE_NAME}" --format '{{.Config.Labels.opencode_version}}' 2>/dev/null || echo "")
+    echo "${version}"
+}
+
+needs_rebuild() {
+    local force_rebuild=$1
+    local skip_update=$2
+    local target_version=$3
+    
+    # Force Rebuild wurde angefordert
+    if [ "${force_rebuild}" = "true" ]; then
+        print_info "Rebuild wurde erzwungen (--rebuild)"
+        return 0
+    fi
+    
+    # Update-Check überspringen
+    if [ "${skip_update}" = "true" ]; then
+        if podman image exists "${FULL_IMAGE_NAME}" 2>/dev/null; then
+            print_info "Update-Check übersprungen (--no-update)"
+            return 1
+        else
+            print_warning "Image existiert nicht, Build erforderlich"
+            return 0
+        fi
+    fi
+    
+    # Prüfe ob Image existiert
+    if ! podman image exists "${FULL_IMAGE_NAME}" 2>/dev/null; then
+        print_info "Image existiert nicht, Build erforderlich"
+        return 0
+    fi
+    
+    # Hole aktuelle Image-Version
+    local current_version
+    current_version=$(get_image_version)
+    
+    if [ -z "${current_version}" ]; then
+        print_warning "Konnte Image-Version nicht ermitteln, Rebuild empfohlen"
+        return 0
+    fi
+    
+    # Vergleiche mit Ziel-Version
+    if [ "${current_version}" != "${target_version}" ]; then
+        print_info "Version-Unterschied erkannt: ${current_version} → ${target_version}"
+        return 0
+    fi
+    
+    print_success "Image ist aktuell (Version: ${current_version})"
+    return 1
+}
+
+# ============================================================================
+# BUILD-FUNKTIONEN
+# ============================================================================
+
+build_image() {
+    local opencode_version=$1
+    local force_rebuild=$2
+    
+    print_header "OpenCode AI - Image Build"
+    
+    # Prüfen ob Dockerfile existiert
+    if [ ! -f "${DOCKERFILE_DIR}/Dockerfile" ]; then
+        print_error "Dockerfile nicht gefunden in: ${DOCKERFILE_DIR}"
+        print_error "Bitte führe das Skript aus dem Projekt-Verzeichnis aus,"
+        print_error "oder erstelle einen Symlink: sudo ln -s ${SCRIPT_DIR}/seccode /usr/local/bin/seccode"
+        exit 1
+    fi
+    
+    print_info "Baue Image: ${FULL_IMAGE_NAME}"
+    print_info "OpenCode Version: ${opencode_version}"
+    print_info "Dockerfile-Verzeichnis: ${DOCKERFILE_DIR}"
+    
+    if [ "${force_rebuild}" = "true" ]; then
+        print_warning "Rebuild-Modus: Build-Cache wird ignoriert"
+    fi
+    echo ""
+    
+    print_warning "⚠️  Der Build kann 5-10 Minuten dauern - Bitte Geduld!"
+    echo ""
+    
+    # Build-Optionen vorbereiten
+    local build_opts=(
+        --tag "${FULL_IMAGE_NAME}"
+        --format docker
+        --build-arg OPENCODE_VERSION="${opencode_version}"
+        --label opencode_version="${opencode_version}"
+        --label build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    )
+    
+    # Bei force_rebuild Cache ignorieren
+    if [ "${force_rebuild}" = "true" ]; then
+        build_opts+=(--no-cache)
+    fi
+    
+    # Image bauen
+    if podman build "${build_opts[@]}" "${DOCKERFILE_DIR}" ; then
+        echo ""
+        print_success "Image erfolgreich gebaut!"
+        echo ""
+    else
+        echo ""
+        print_error "Build fehlgeschlagen!"
+        exit 1
+    fi
+}
+
+# ============================================================================
+# RUN-FUNKTIONEN
+# ============================================================================
+
+setup_directories() {
+    # OpenCode Verzeichnisse
+    local opencode_config_dir="${HOME}/.config/opencode"
+    local opencode_data_dir="${HOME}/.local/share/opencode"
+    local opencode_state_dir="${HOME}/.local/state/opencode"
+    local opencode_cache_dir="${HOME}/.cache/opencode"
+    
+    # Build Tool Caches
+    local maven_cache_dir="${HOME}/.m2"
+    local gradle_cache_dir="${HOME}/.gradle"
+    local npm_cache_dir="${HOME}/.npm"
+    local pip_cache_dir="${HOME}/.cache/pip"
+    local bun_cache_dir="${HOME}/.cache/bun"
+    
+    # Verzeichnisse erstellen falls sie nicht existieren
+    mkdir -p "${opencode_config_dir}"
+    mkdir -p "${opencode_data_dir}"
+    mkdir -p "${opencode_state_dir}"
+    mkdir -p "${opencode_cache_dir}"
+    mkdir -p "${maven_cache_dir}"
+    mkdir -p "${gradle_cache_dir}"
+    mkdir -p "${npm_cache_dir}"
+    mkdir -p "${pip_cache_dir}"
+    mkdir -p "${bun_cache_dir}"
+    
+    print_success "Config-Verzeichnis: ${opencode_config_dir}"
+    print_success "Data-Verzeichnis: ${opencode_data_dir}"
+    print_success "State-Verzeichnis: ${opencode_state_dir}"
+    print_success "Cache-Verzeichnis: ${opencode_cache_dir}"
+}
+
+setup_volumes() {
+    local workspace_dir=$1
+    
+    # OpenCode Verzeichnisse
+    local opencode_config_dir="${HOME}/.config/opencode"
+    local opencode_data_dir="${HOME}/.local/share/opencode"
+    local opencode_state_dir="${HOME}/.local/state/opencode"
+    local opencode_cache_dir="${HOME}/.cache/opencode"
+    
+    # Build Tool Caches
+    local maven_cache_dir="${HOME}/.m2"
+    local gradle_cache_dir="${HOME}/.gradle"
+    local npm_cache_dir="${HOME}/.npm"
+    local pip_cache_dir="${HOME}/.cache/pip"
+    local bun_cache_dir="${HOME}/.cache/bun"
+    
+    # Git Config
+    local git_config_file="${HOME}/.gitconfig"
+    local git_config_dir="${HOME}/.config/git"
+    
+    # SSH Keys
+    local ssh_dir="${HOME}/.ssh"
+    
+    # SELinux-Labeling nur auf Linux verwenden
+    local selinux_label=""
+    local selinux_label_ro=":ro"
+    if [[ "$(uname -s)" == "Linux" ]]; then
+        selinux_label=":Z"
+        selinux_label_ro=":ro,Z"
+    fi
+    
+    # Volume-Optionen vorbereiten
+    VOLUME_OPTS=(
+        -v "${workspace_dir}:/home/opencode/workspace${selinux_label}"
+        -v "${opencode_config_dir}:/home/opencode/.config/opencode${selinux_label}"
+        -v "${opencode_data_dir}:/home/opencode/.local/share/opencode${selinux_label}"
+        -v "${opencode_state_dir}:/home/opencode/.local/state/opencode${selinux_label}"
+        -v "${opencode_cache_dir}:/home/opencode/.cache/opencode${selinux_label}"
+        -v "${maven_cache_dir}:/home/opencode/.m2${selinux_label}"
+        -v "${gradle_cache_dir}:/home/opencode/.gradle${selinux_label}"
+        -v "${npm_cache_dir}:/home/opencode/.npm${selinux_label}"
+        -v "${pip_cache_dir}:/home/opencode/.cache/pip${selinux_label}"
+        -v "${bun_cache_dir}:/home/opencode/.cache/bun${selinux_label}"
+    )
+    
+    # Git Config mounten wenn vorhanden
+    if [ -f "${git_config_file}" ]; then
+        VOLUME_OPTS+=(-v "${git_config_file}:/home/opencode/.gitconfig${selinux_label_ro}")
+        print_success "Git Config gefunden: ${git_config_file}"
+    else
+        print_warning "Git Config nicht gefunden: ${git_config_file}"
+    fi
+    
+    if [ -d "${git_config_dir}" ]; then
+        VOLUME_OPTS+=(-v "${git_config_dir}:/home/opencode/.config/git${selinux_label_ro}")
+        print_success "Git Config Dir gefunden: ${git_config_dir}"
+    fi
+    
+    # SSH Keys mounten wenn vorhanden
+    if [ -d "${ssh_dir}" ]; then
+        VOLUME_OPTS+=(-v "${ssh_dir}:/home/opencode/.ssh${selinux_label_ro}")
+        print_success "SSH-Keys gefunden: ${ssh_dir}"
+    else
+        print_warning "SSH-Keys nicht gefunden: ${ssh_dir}"
+    fi
+}
+
+run_container() {
+    local workspace_dir=$1
+    shift
+    local opencode_args=("$@")
+    
+    print_header "OpenCode AI - Container Start"
+    
+    setup_directories
+    echo ""
+    
+    setup_volumes "${workspace_dir}"
+    echo ""
+    
+    print_success "Workspace: ${workspace_dir}"
+    echo ""
+    
+    print_info "Starte OpenCode Container..."
+    echo ""
+    
+    # Container starten
+    podman run -it --rm \
+        --name "${CONTAINER_NAME}" \
+        --network host \
+        --cap-add=NET_RAW \
+        "${VOLUME_OPTS[@]}" \
+        "${FULL_IMAGE_NAME}" ${opencode_args[@]+"${opencode_args[@]}"}
+    
+    local exit_code=$?
+    
+    echo ""
+    if [ ${exit_code} -eq 0 ]; then
+        print_success "Container beendet."
+    else
+        print_warning "Container beendet mit Exit-Code: ${exit_code}"
+    fi
+    
+    return ${exit_code}
+}
+
+# ============================================================================
+# HAUPTFUNKTION
+# ============================================================================
+
+main() {
+    # Standard-Werte
+    local force_rebuild=false
+    local skip_update=false
+    local opencode_version=""
+    local workspace_dir=""
+    local opencode_args=()
+    
+    # Parameter parsen
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --rebuild)
+                force_rebuild=true
+                shift
+                ;;
+            --no-update)
+                skip_update=true
+                shift
+                ;;
+            --version)
+                if [ -z "${2:-}" ]; then
+                    print_error "--version erfordert einen Wert"
+                    exit 1
+                fi
+                opencode_version="$2"
+                shift 2
+                ;;
+            --help|-h)
+                show_help
+                ;;
+            *)
+                # Wenn workspace_dir noch nicht gesetzt und Argument ist ein Verzeichnis
+                if [ -z "${workspace_dir}" ] && [ -d "$1" ]; then
+                    workspace_dir="$1"
+                    shift
+                else
+                    # Alle weiteren Parameter sind OpenCode-Argumente
+                    opencode_args+=("$1")
+                    shift
+                fi
+                ;;
+        esac
+    done
+    
+    # Workspace-Dir setzen (Standard: aktuelles Verzeichnis)
+    if [ -z "${workspace_dir}" ]; then
+        workspace_dir="."
+    fi
+    workspace_dir="$(cd "${workspace_dir}" && pwd)"  # Absolute Path ermitteln
+    
+    print_header "seccode - OpenCode AI Runner"
+    
+    # Prüfen ob Podman installiert ist
+    if ! command -v podman &> /dev/null; then
+        print_error "Podman ist nicht installiert!"
+        echo "Bitte installiere Podman: brew install podman"
+        exit 1
+    fi
+    print_success "Podman gefunden"
+    echo ""
+    
+    # OpenCode Version ermitteln wenn nicht spezifiziert
+    if [ -z "${opencode_version}" ]; then
+        opencode_version=$(check_latest_version)
+    else
+        print_info "Verwende spezifizierte OpenCode Version: ${opencode_version}"
+    fi
+    
+    if [ "${opencode_version}" != "latest" ]; then
+        print_success "Ziel-Version: ${opencode_version}"
+    fi
+    echo ""
+    
+    # Prüfen ob Build nötig ist
+    if needs_rebuild "${force_rebuild}" "${skip_update}" "${opencode_version}"; then
+        build_image "${opencode_version}" "${force_rebuild}"
+    fi
+    
+    # Container starten
+    run_container "${workspace_dir}" "${opencode_args[@]+"${opencode_args[@]}"}"
+}
+
+# ============================================================================
+# SCRIPT-EINSTIEG
+# ============================================================================
+
+main "$@"
