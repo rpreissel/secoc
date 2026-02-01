@@ -2,7 +2,7 @@
 
 # seccode - OpenCode AI Podman Runner with Auto-Update
 # Unified script for build and run with automatic version management
-set -euo pipefail
+set -eo pipefail
 
 # ============================================================================
 # CONFIGURATION
@@ -29,6 +29,20 @@ NC='\033[0m' # No Color
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
+
+validate_opencode_args() {
+    local opencode_args=("$@")
+    local arg
+    for arg in "${opencode_args[@]}"; do
+        # Block dangerous patterns that could lead to command injection
+        if [[ "${arg}" =~ \$ ]] || [[ "${arg}" =~ \; ]] || [[ "${arg}" =~ \& ]] || \
+           [[ "${arg}" =~ \| ]] || [[ "${arg}" =~ \< ]] || [[ "${arg}" =~ \> ]]; then
+            print_error "Invalid argument detected: ${arg}"
+            print_error "Arguments may not contain: $ ; & | < >"
+            exit 1
+        fi
+    done
+}
 
 print_header() {
     echo -e "${BLUE}========================================${NC}"
@@ -111,8 +125,24 @@ EOF
 check_latest_version() {
     print_info "Determining latest OpenCode version..."
     
-    local version
-    version=$(curl -fsSL https://api.github.com/repos/anomalyco/opencode/releases/latest 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/' || echo "")
+    local version=""
+    local attempt=0
+    local max_attempts=3
+    
+    while [ -z "${version}" ] && [ ${attempt} -lt ${max_attempts} ]; do
+        version=$(curl -fsSL --connect-timeout 5 --max-time 10 \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/anomalyco/opencode/releases/latest" 2>/dev/null \
+            | jq -r '.tag_name // empty' 2>/dev/null || echo "")
+        attempt=$((attempt + 1))
+        if [ -z "${version}" ] && [ ${attempt} -lt ${max_attempts} ]; then
+            print_info "Retry ${attempt}/${max_attempts}..."
+            sleep 2
+        fi
+    done
+    
+    # Remove 'v' prefix if present
+    version="${version#v}"
     
     if [ -z "${version}" ]; then
         print_warning "Could not determine latest version, using 'latest'"
@@ -357,6 +387,9 @@ run_container() {
     print_info "Starting OpenCode container..."
     echo ""
     
+    # Validate arguments for security
+    validate_opencode_args "${opencode_args[@]}"
+    
     # Start container
     podman run -it --rm \
         --name "${CONTAINER_NAME}" \
@@ -429,7 +462,12 @@ main() {
     if [ -z "${workspace_dir}" ]; then
         workspace_dir="."
     fi
-    workspace_dir="$(cd "${workspace_dir}" && pwd)"  # Determine absolute path
+    # Normalize and validate path
+    workspace_dir="$(cd "${workspace_dir}" 2>/dev/null && pwd)"
+    if [ -z "${workspace_dir}" ]; then
+        print_error "Invalid workspace directory"
+        exit 1
+    fi
     
     print_header "seccode - OpenCode AI Runner"
     

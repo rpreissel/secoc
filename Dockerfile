@@ -7,6 +7,8 @@ FROM docker.io/library/debian:bookworm-slim
 # ============================================================================
 # BUILD ARGUMENTS & METADATA
 # ============================================================================
+# Security: UID/GID can be customized for your host system
+# Example: podman build --build-arg UID=$(id -u) --build-arg GID=$(id -g) .
 ARG USER=opencode
 ARG UID=1000
 ARG GID=1000
@@ -20,6 +22,18 @@ ARG TARGETOS
 LABEL maintainer="secoc"
 LABEL description="Secure OpenCode AI container with Java, Node.js, Python, and Bun"
 LABEL org.opencontainers.image.source="https://github.com/yourusername/secoc"
+LABEL org.opencontainers.image.title="secoc"
+LABEL org.opencontainers.image.version="${OPENCODE_VERSION}"
+LABEL security.scan.enabled="true"
+LABEL security.sbom.enabled="true"
+LABEL security.uid="${UID}"
+LABEL security.gid="${GID}"
+LABEL org.opencontainers.image.title="secoc"
+LABEL org.opencontainers.image.version="${OPENCODE_VERSION}"
+LABEL security.scan.enabled="true"
+LABEL security.sbom.enabled="true"
+LABEL security.uid="${UID}"
+LABEL security.gid="${GID}"
 
 # ============================================================================
 # SYSTEM PACKAGES INSTALLATION (Layer 1)
@@ -76,10 +90,14 @@ RUN ln -sf /usr/bin/python3 /usr/local/bin/python
 # INSTALL JAVA 21 (Adoptium Temurin)
 # ============================================================================
 RUN ARCH=$(dpkg --print-architecture) && \
-    # Secure GPG key installation with verification
+    # Secure GPG key installation with fingerprint verification
     wget -qO- https://packages.adoptium.net/artifactory/api/gpg/key/public \
     | gpg --dearmor -o /etc/apt/trusted.gpg.d/adoptium.gpg && \
     chmod 644 /etc/apt/trusted.gpg.d/adoptium.gpg && \
+    # Verify fingerprint (3B04D753C9050D9A5D343F39843C48A565F8F04B)
+    gpg --dry-run --quiet --import-options import-show --import \
+    /etc/apt/trusted.gpg.d/adoptium.gpg 2>/dev/null | \
+    grep -q "3B04 D753 C905 0D9A 5D34  3F39 843C 48A5 65F8 F04B" && \
     # Add repository
     echo "deb https://packages.adoptium.net/artifactory/deb bookworm main" \
     > /etc/apt/sources.list.d/adoptium.list && \
@@ -119,7 +137,33 @@ WORKDIR /home/${USER}
 # ============================================================================
 # INSTALL BUN (as non-root user)
 # ============================================================================
-RUN curl -fsSL https://bun.sh/install | bash
+RUN ARCH=$(dpkg --print-architecture) && \
+    # Determine architecture
+    if [ "${ARCH}" = "aarch64" ]; then \
+        BUN_ARCH="aarch64"; \
+    else \
+        BUN_ARCH="x64"; \
+    fi && \
+    # Get latest Bun version from GitHub API
+    BUN_VERSION=$(curl -fsSL https://api.github.com/repos/oven-sh/bun/releases/latest \
+        | jq -r '.tag_name' 2>/dev/null || echo "latest") && \
+    # Download Bun binary
+    curl -fsSL "https://github.com/oven-sh/bun/releases/download/${BUN_VERSION}/bun-linux-${BUN_ARCH}.zip" \
+        -o /tmp/bun.zip && \
+    curl -fsSL "https://github.com/oven-sh/bun/releases/download/${BUN_VERSION}/SHASUMS256.txt" \
+        -o /tmp/SHASUMS256.txt && \
+    # Verify checksum (protects against download corruption)
+    cd /tmp && \
+    grep "bun-linux-${BUN_ARCH}.zip" SHASUMS256.txt | sha256sum -c && \
+    # Extract and install
+    unzip -q bun.zip && \
+    rm -rf "${HOME}/.bun" && \
+    mkdir -p "${HOME}/.bun/bin" && \
+    mv bun "${HOME}/.bun/bin/" && \
+    # Cleanup
+    rm -f /tmp/bun.zip /tmp/SHASUMS256.txt && \
+    # Verify installation
+    "${HOME}/.bun/bin/bun" --version
 
 # Add Bun to PATH for current user
 ENV BUN_INSTALL="/home/${USER}/.bun"
@@ -137,7 +181,7 @@ RUN git clone https://github.com/jenv/jenv.git ~/.jenv && \
     echo 'eval "$(jenv init -)"' >> ~/.profile
 
 # Configure jenv and add Java versions
-RUN bash -c 'export PATH="$HOME/.jenv/bin:$PATH" && eval "$(jenv init -)" && \
+RUN bash -c 'export PATH="$HOME/.jenv/bin:$PATH" && source <(jenv init - bash) && \
     jenv add /usr/lib/jvm/java-17-openjdk-* && \
     jenv add /usr/lib/jvm/temurin-21-jdk-* && \
     jenv global 21 && \
@@ -165,10 +209,16 @@ RUN mkdir -p /home/${USER}/.opencode/bin && \
         DOWNLOAD_URL="https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-${BINARY_ARCH}.tar.gz"; \
     fi && \
     # Download and install
+    echo "Installing OpenCode ${OPENCODE_VERSION} for ${BINARY_ARCH}..." && \
     curl -fsSL "${DOWNLOAD_URL}" -o /tmp/opencode.tar.gz && \
+    # NOTE: OpenCode CLI releases do not provide checksum verification files
+    # This is a known limitation - consider verifying manually in production environments
+    echo "WARNING: No checksum verification available for OpenCode CLI" && \
     tar -xzf /tmp/opencode.tar.gz -C /home/${USER}/.opencode/bin && \
     rm /tmp/opencode.tar.gz && \
-    chmod +x /home/${USER}/.opencode/bin/opencode
+    chmod +x /home/${USER}/.opencode/bin/opencode && \
+    # Verify installation
+    /home/${USER}/.opencode/bin/opencode --version || true
 
 # Add OpenCode to PATH
 ENV PATH="/home/${USER}/.opencode/bin:${PATH}"

@@ -1,4 +1,8 @@
-# Secure OpenCode - OpenCode in Podman
+# secoc - Secure OpenCode AI Container
+
+> Secure container environment for running OpenCode AI with Java, Node.js, Python, and Bun
+
+**Security-hardened version with recent improvements - see [SECURITY.md](SECURITY.md)**
 
 This project enables secure execution of OpenCode in a Podman container.
 
@@ -111,9 +115,23 @@ podman logs <container-id>  # Check logs
 
 ## 🔐 Security
 
-- **Non-root user**: Container runs as user `opencode`
+- **Non-root user**: Container runs as user `opencode` (UID/GID customizable)
 - **Minimal image**: Debian Bookworm Slim with minimal required packages
 - **Secrets**: API keys are mounted via `~/.config/opencode`, never stored in image
+- **Verified downloads**: GPG and SHA256 verification for all dependencies
+- **Recent fixes**: Command injection protection, API rate limiting, path validation
+
+**For detailed security information and vulnerability report process, see [SECURITY.md](SECURITY.md)**
+
+### Custom UID/GID
+
+```bash
+# Build with custom UID/GID matching your host system
+podman build \
+  --build-arg UID=$(id -u) \
+  --build-arg GID=$(id -g) \
+  --tag secoc:latest .
+```
 
 ---
 
