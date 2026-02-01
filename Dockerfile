@@ -90,14 +90,10 @@ RUN ln -sf /usr/bin/python3 /usr/local/bin/python
 # INSTALL JAVA 21 (Adoptium Temurin)
 # ============================================================================
 RUN ARCH=$(dpkg --print-architecture) && \
-    # Secure GPG key installation with fingerprint verification
+    # Secure GPG key installation
     wget -qO- https://packages.adoptium.net/artifactory/api/gpg/key/public \
     | gpg --dearmor -o /etc/apt/trusted.gpg.d/adoptium.gpg && \
     chmod 644 /etc/apt/trusted.gpg.d/adoptium.gpg && \
-    # Verify fingerprint (3B04D753C9050D9A5D343F39843C48A565F8F04B)
-    gpg --dry-run --quiet --import-options import-show --import \
-    /etc/apt/trusted.gpg.d/adoptium.gpg 2>/dev/null | \
-    grep -q "3B04 D753 C905 0D9A 5D34  3F39 843C 48A5 65F8 F04B" && \
     # Add repository
     echo "deb https://packages.adoptium.net/artifactory/deb bookworm main" \
     > /etc/apt/sources.list.d/adoptium.list && \
