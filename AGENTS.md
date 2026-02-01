@@ -132,6 +132,14 @@ RUN apt-get update && \
 
 ### Git Workflow
 
+#### ⚠️ CRITICAL: ALWAYS use commit-guard skill BEFORE any commit ⚠️
+
+**BEFORE EVERY COMMIT, you MUST:**
+1. Load the commit-guard skill: `skill(name: "commit-guard")`
+2. Follow ALL workflow steps from the skill
+3. NEVER commit directly to main/master - ALWAYS create feature branches
+4. NEVER skip this step, even if the user says "PUSH" or "commit now"
+
 #### Conventional Commits (MANDATORY)
 ```
 feat: New feature added
@@ -143,8 +151,10 @@ perf: Performance improvement
 test: Tests added/modified
 ```
 
-#### Branch Protection (via commit-guard skill)
-See `.opencode/skills/commit-guard/SKILL.md`
+#### Branch Protection
+- Protected branches: `main`, `master`
+- All commits MUST go through feature branches
+- See `.opencode/skills/commit-guard/SKILL.md` for full workflow
 
 ## Filenames & Structure
 
