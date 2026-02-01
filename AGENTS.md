@@ -52,18 +52,11 @@ podman run -it --rm opencode-ai:latest /bin/bash
 ### Git & Release
 
 ```bash
-# Check status
-git status
-
-# Commits with Conventional Commits format
-git commit -m "feat: new feature"
-git commit -m "fix: bugfix"
-git commit -m "docs: documentation updated"
-git commit -m "chore: maintenance work"
-
 # Release is automatically created via GitHub Actions on push to main
 git push origin main
 ```
+
+**Note:** Always use `commit-guard` skill for commits (see `.opencode/skills/commit-guard/SKILL.md`)
 
 **Note:** This project has no traditional unit/integration tests. Testing is done through:
 - Manual container validation
@@ -151,11 +144,7 @@ test: Tests added/modified
 ```
 
 #### Branch Protection (via commit-guard skill)
-- **Protected Branches:** `main`, `master`
-- **Allowed Patterns:** `feature/*`, `bugfix/*`, `hotfix/*`
-- **Auto-Push:** Enabled (after branch creation)
-- **Max Files:** 15 per commit
-- **Max Lines:** 500 changes per commit
+See `.opencode/skills/commit-guard/SKILL.md`
 
 ## Filenames & Structure
 
@@ -179,21 +168,6 @@ test: Tests added/modified
 ├── AGENTS.md              # This File
 └── CHANGELOG.md           # Auto-generated
 ```
-
-## Branch Protection (MANDATORY)
-
-**CRITICAL:** Before EVERY Git commit, the skill `commit-guard` is automatically executed.
-
-### Automatic Checks
-- Prevents direct commits to `main`/`master`
-- Automatically creates feature branches if needed
-- Validates commit size (max. 15 files, 500 lines)
-- Checks branch name patterns
-
-### Configuration
-See `.opencode/config.json` → `skills.commit-guard`
-
-**Details:** `.opencode/skills/commit-guard/SKILL.md`
 
 ## Best Practices
 
@@ -221,7 +195,7 @@ See `.opencode/config.json` → `skills.commit-guard`
 - Changelog is automatically generated
 
 ### 5. Git Hygiene
+- Use `commit-guard` skill for all commits (see `.opencode/skills/commit-guard/SKILL.md`)
 - One Feature = One Branch
 - Atomic Commits (logically related changes)
 - Meaningful commit messages
-- NEVER push directly to `main` (enforced via commit-guard)
